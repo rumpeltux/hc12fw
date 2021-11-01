@@ -18,19 +18,11 @@ void on_port3() {  // IO1 / IRQ
 void on_port2() {
   putchar('B');
   interrupt_state = PIN2;
-
 }
 
 void setup() {
   SERIAL_INIT(115200);
   puts("HC12\r");
-
-  digitalWrite(SI_CS, 1);
-  pinMode(SI_CS, OUTPUT);
-  
-  pinMode(SI_IRQ, INPUT);
-  pinMode(SI_IO0, INPUT);
-  pinMode(SI_IO1, INPUT);
 
   pinMode(A3, OUTPUT);
   digitalWrite(A3, 1);
@@ -40,13 +32,15 @@ void setup() {
   delayMicroseconds(11);
   digitalWrite(D4, 0);
 
-  attachInterrupt(B4, &on_port2, FALLING | RISING);
-  attachInterrupt(C4, &on_port3, RISING);
+  attachInterrupt(SI_IO0, &on_port2, FALLING | RISING);
+  attachInterrupt(SI_IRQ, &on_port3, RISING);
 
   init_radio();
+
   radio_rx(0x14, radio_buf);
   digitalWrite(A3, 0);
-  //radio_tx(0x14, "\x18\x08" "Hello!\r\n");
+  radio_tx(0x14, "\x18\x08" "Hello!\r\n");
+  radio_rx(0x14, radio_buf);
 }
 
 void loop() {
