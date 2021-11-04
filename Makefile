@@ -37,4 +37,4 @@ flash: $(TARGET).ihx static.lib.ihx
 	done
 
 clean:
-	rm -f *.asm *.cdb *.ihx *.lnk *.lk *.lst *.map *.mem *.rel *.rst *.sym
+	rm -f *.asm *.cdb *.ihx *.lnk *.lk *.lst *.map *.mem *.rel *.rst *.sym *.needsflash static.lib.*
