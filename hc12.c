@@ -21,7 +21,6 @@ void on_port2() {
 }
 
 void setup() {
-  SERIAL_INIT(115200);
   puts("HC12\r");
 
   pinMode(A3, OUTPUT);
