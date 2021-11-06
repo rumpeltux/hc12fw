@@ -5,7 +5,7 @@ ARDUINO ?= arduino
 TARGET ?= hc12
 
 CC := sdcc
-CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src
+CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src -DSWIMCAT_BUFSIZE_BITS=7
 ARDUINO_LIB := $(ARDUINO)/src/arduino.lib
 
 all: $(TARGET).ihx
@@ -33,7 +33,7 @@ $(TARGET).ihx: $(ARDUINO_LIB) $(TARGET).rel static.lib.rel $(ARDUINO)/src/main.r
 
 flash: $(TARGET).ihx static.lib.ihx
 	for i in $^; do \
-	  [ -e $$i.needsflash ] && esp-stlink/python/flash.py --stall -i $$i; \
+	  [ -e $$i.needsflash ] && esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash; \
 	done
 
 clean:

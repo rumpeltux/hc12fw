@@ -4,7 +4,7 @@
 #include "stm8.h"
 #include "si.h"
 
-uint8_t interrupt_state;
+uint8_t interrupt_state=0;
 
 void on_port3() {  // IO1 / IRQ
   interrupt_state = PIN3;
@@ -42,12 +42,16 @@ void setup() {
   radio_rx(0x14, radio_buf);
 }
 
+extern void swimcat_flush();
+
 void loop() {
-  putchar('L');
-  wfi();
-  putchar('X');
+  putchar('L'); swimcat_flush(); // going to wfi
+  //wfi();
+  while(interrupt_state == 0) ;
+  interrupt_state = 0;
+  putchar('X'); // wakeup from interrupt
   uint8_t recvd = radio_rx(0x14, radio_buf);
-  debug('X', recvd);
+  debug('X', recvd); // received bytes
   if (recvd) {
     puts(radio_buf);
     radio_tx(0x14, radio_buf);

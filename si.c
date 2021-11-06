@@ -65,7 +65,7 @@ static const uint8_t cmd_get_int_status15[] = {0x20, 0, 0, 0};
 #define SET_PROPERTY(prop, len, ...) (prop >> 8), len, (prop & 0xff), __VA_ARGS__
 
 static const uint8_t radio_init[] = {
-  0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot
+  0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot RF_POWER_UP
   0x07, 0x13, 0x60, 0x48, 0x57, 0x56, 0x5a, 0x4b, // gpio
   SET_PROPERTY_L(0x0000, 1, 0x48),
   SET_PROPERTY_L(0x0003, 1, 0x40),
@@ -155,7 +155,7 @@ void init_radio() {
   } while (*cmd_p != 0);
   
   si_set_tx_power(0x7F);  // full power
-  si_set_channel(2);
+  si_set_channel(1);
   puts("RX\r");
 }
 
@@ -165,32 +165,39 @@ void si_change_state(uint8_t state) {
   spi_transfer(0x34); // change state
   spi_transfer(state);
   digitalWrite(SI_CS, 1);
-}  
+}
+
+void wait_radio_tx_done() {
+  uint8_t i=0;
+  while(digitalRead(SI_IO0) == 0 && ++i) hexout(i);
+  putchar(','); // SI_IO0 is now high
+  while(digitalRead(SI_IO0) != 0 && ++i) hexout(i);
+  putchar('!'); // SI_IO0 in now low
+}
+
+void radio_rx_mode() {
+  dbg = 1;
+  spi_select_tx(sizeof(rx_config), rx_config);
+  puts("\r");
+}
 
 void radio_tx(uint8_t len, const uint8_t *data) {
   dbg = 0;
-  putchar('T');
+  putchar('T'); // TX mode
   spi_select_tx(sizeof(tx_config), tx_config);
 
   digitalWrite(SI_CS, 0);
   spi_transfer(0x66); // TX_FIFO
   spi_tx(len, data);
   digitalWrite(SI_CS, 1);
-  putchar('1');
+  putchar('1'); // FIFO filled
 
   si_tx_cmd_buf[4] = len;
   spi_select_tx(sizeof(si_tx_cmd_buf), si_tx_cmd_buf);
-  putchar('2');
-
-  uint8_t i=0;
-  while(digitalRead(SI_IO0) == 0 && ++i) hexout(i);
-  putchar(',');
-  while(digitalRead(SI_IO0) != 0 && ++i) hexout(i);
-  putchar('!');
+  putchar('2'); // TX cmd issued
   
-  dbg = 1;
-  spi_select_tx(sizeof(rx_config), rx_config);
-  puts("\r");
+  wait_radio_tx_done();
+  radio_rx_mode();
 }
 
 static const uint8_t fifo_info0[] = {0x15, 0};
@@ -223,27 +230,31 @@ static void si_read_rx_fifo_info(uint8_t len, uint8_t *dest) {
 
 static const uint8_t request_device_state[] = {0x33};
 
-uint8_t radio_rx(uint8_t arg, uint8_t *dest) {
-  si_rx_cmd_buf[4] = arg;
-  putchar('W');
+// len is sizeof dest and must be >= 8 since we reuse the buffer
+uint8_t radio_rx(uint8_t len, uint8_t *dest) {
+  si_rx_cmd_buf[4] = len;
+  putchar('W');  // Wait for SI_IRQ to become low
   while(digitalRead(SI_IRQ) != 0) ;
-  putchar('!');
+  putchar('!');  // It's LOW now.
   dbg = 1;
   // get payload length
   spi_select_tx(2, fifo_info0);
   uint8_t res0 = si_read_cmd_buf(2, dest);
   
   uint8_t ready = dest[0];
-  //debug('R', ready);
+  debug('R', ready);
   if (res0 && ready) {
     spi_select_tx(4, cmd_get_int_status15);
-    si_read_cmd_buf(7, dest + 1);
-    debug('P', dest[3]);
-    if ((dest[3] & 0x10) != 0) // RX pending
+    uint8_t *interrupts = dest + 1;
+    si_read_cmd_buf(8, interrupts);
+    putchar('I'); // interrupt state
+    for (uint8_t i=0;i<8; i++) hexout(interrupts[i]);
+
+    if ((interrupts[2] & 0x10) != 0) // RX pending
     {
       si_read_rx_fifo_info(ready, dest);
     } else {
-      if ((dest[3] & 0x8) != 0) {  // CRC error
+      if ((interrupts[2] & 0x8) != 0) {  // CRC error
         // reset RX & TX fifos
         spi_select_tx(2, fifo_info3);
       }
@@ -253,13 +264,17 @@ uint8_t radio_rx(uint8_t arg, uint8_t *dest) {
 
   uint8_t device_state[3];
   dbg = 1;
+  // Requests the current state of the device and lists pending TX and RX requests
   spi_select_tx(1, request_device_state);
   uint8_t res1 = si_read_cmd_buf(3, device_state);
-  if(res0) putchar('0');
+  // Old AN625: state, channel, post rx, post tx
+  // New AN625: state, channel
+  if(res0) putchar('0');  // fifo info completed success
   if(res1) {
-    debug('S', device_state[0]);
+    debug('S', device_state[0]); // current state?
   }
-  if (res1 && (device_state[0] & 0xF) != 8) {
+  if (res1 && (device_state[0] & 0xF) != 8) { // not in RX state
+    // Start next RX.
     spi_select_tx(sizeof(si_rx_cmd_buf), si_rx_cmd_buf);
   }
   putchar('!');
@@ -268,7 +283,7 @@ uint8_t radio_rx(uint8_t arg, uint8_t *dest) {
 }
 
 void radio_wakeup() {
-  // TODO
+  // TODO (may not be necessary)
 }
 
 void radio_halt() {
