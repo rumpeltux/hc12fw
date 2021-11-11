@@ -30,9 +30,11 @@ void setup() {
   digitalWrite(D4, 1);
   delayMicroseconds(11);
   digitalWrite(D4, 0);
+  pinMode(B5, INPUT_PULLUP);
 
-  attachInterrupt(SI_IO0, &on_port2, FALLING | RISING);
-  attachInterrupt(SI_IRQ, &on_port3, RISING);
+  attachInterrupt(SI_IO0, &on_port2, FALLING | RISING); // B4
+  attachInterrupt(B5, &on_port2, FALLING | RISING); // B4
+  attachInterrupt(SI_IRQ, &on_port3, RISING); // C4
 
   init_radio();
 
@@ -46,8 +48,7 @@ extern void swimcat_flush();
 
 void loop() {
   putchar('L'); swimcat_flush(); // going to wfi
-  //wfi();
-  while(interrupt_state == 0) ;
+  while(interrupt_state == 0) handle_events();
   interrupt_state = 0;
   putchar('X'); // wakeup from interrupt
   uint8_t recvd = radio_rx(0x14, radio_buf);

@@ -54,6 +54,7 @@ void debug(uint8_t c, uint8_t n) {
 // 20, 8, 16, 17, 1a, b
 // 32, 8, 22, 23, 26, 11
 // tx-high, cmd-done-high, ant1, ant2, sync-high, SDO
+// GPIO-config
 static const uint8_t tx_config[] = {0x13, 0x60, 0x48, 0x56, 0x57, 0x5a, 0x4b};
 static const uint8_t rx_config[] = {0x13, 0x60, 0x48, 0x57, 0x56, 0x5a, 0x4b};
 static uint8_t si_tx_cmd_buf[6] = {0x31, 0xE6, 0x10, 0, 0, 0};
@@ -61,8 +62,8 @@ static uint8_t si_rx_cmd_buf[8] = {0x32, 0xE6, 0, 0, 0, 0, 1, 3};
 
 static const uint8_t cmd_get_int_status15[] = {0x20, 0, 0, 0};
 
-#define SET_PROPERTY_L(prop, len, ...) (len + 4), (prop >> 8), len, (prop & 0xff), __VA_ARGS__
-#define SET_PROPERTY(prop, len, ...) (prop >> 8), len, (prop & 0xff), __VA_ARGS__
+#define SET_PROPERTY_L(prop, len, ...) (len + 4), SET_PROPERTY(prop, len, __VA_ARGS__)
+#define SET_PROPERTY(prop, len, ...) 0x11, (prop >> 8), len, (prop & 0xff), __VA_ARGS__
 
 static const uint8_t radio_init[] = {
   0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot RF_POWER_UP
@@ -155,7 +156,7 @@ void init_radio() {
   } while (*cmd_p != 0);
   
   si_set_tx_power(0x7F);  // full power
-  si_set_channel(1);
+  si_set_channel(2);
   puts("RX\r");
 }
 
