@@ -11,6 +11,7 @@
 #define STATE_SI_IO1 PIN6
 
 extern uint8_t interrupt_state;
+extern uint8_t si_latched_rssi;
 extern uint8_t radio_buf[0x40];
 
 // initialize the radio.
@@ -22,6 +23,12 @@ void radio_tx(uint8_t len, const uint8_t *data);
 
 // TODO: check if this blocks until a packet has arrived
 // returns the amount of bytes received
+void hexout16(uint16_t data);
+void hexout(uint8_t data);
+uint8_t fu2_radio_rx(uint8_t len, uint8_t *dest);
+uint8_t fu2_radio_rx_long(uint8_t len, uint8_t *dest);
+
+
 uint8_t radio_rx(uint8_t len, uint8_t *dest);
 void debug(uint8_t c, uint8_t n);
 

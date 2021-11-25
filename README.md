@@ -74,3 +74,5 @@ A3,D3 are at the chip’s edge, so their legs are more easily accessible for sol
 * Pinout (all partially incomplete, but still helpful).
   * https://twitter.com/cathedrow/status/845044463118553091/photo/1
   * https://cxem.net/review/review26.php
+* RFIC Programming Guide:
+  http://www.farnell.com/datasheets/1889753.pdf
