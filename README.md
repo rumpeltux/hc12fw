@@ -1,12 +1,24 @@
 # HC-12 Firmware Base
 
+## EXPERIMENTAL / UNFINISHED
+
+The code in this repository is absolutely experimental and may not work for you!
+Since I stopped active development, I’m releasing this WIP version for others to
+pick up.
+
+## About
+
 You can use this repository as a base to build your own HC-12 firmware.
 
 The radio protocol is compatible with `AT+DEFAULT` settings in non-modified
-HC-12 units assuming that you use a packet-length of 20 bytes.
+HC-12 units assuming that you use a packet-length of 20 bytes. For HC-12 to
+receive packets, you need to use a 2-byte header: [0x18, payload-length].
 
 None of the other communication modes are implemented for now, but you can
 change channel and TX power.
+
+Some efforts towards FU-2 have started but are not quite there yet in the
+`fu2-devel` branch.
 
 ## API
 
@@ -24,7 +36,17 @@ It sends `Hello\r\n` on boot and otherwise resends each packet as received.
 ## Restoring the original firmware
 
 To create a backup that you can restore, follow the firmware extraction
-instructions in [HC-12 parasite](TODO)
+instructions in https://github.com/rumpeltux/hc12
+
+## FW Structure
+Radio interrupts. Interrupt handler sets flags:
+
+* RX pending
+* TX complete
+
+Main loop:
+
+TODO
 
 ## Available GPIO PINs
 
