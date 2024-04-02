@@ -1,10 +1,13 @@
 # HC-12 Firmware Base
 
-## EXPERIMENTAL / UNFINISHED
+## EXPERIMENTAL / UNFINISHED [DEVELOPMENT BRANCH]
 
 The code in this repository is absolutely experimental and may not work for you!
 Since I stopped active development, I’m releasing this WIP version for others to
 pick up.
+
+This is the development branch for FU2 support. IT IS NOT YET WORKING.
+The code is not cleaned up and full of debug statements (sorry).
 
 ## About
 

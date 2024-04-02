@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "si.h"
 #include <stdio.h>
+#include "Si446x/Si446x/Si446x_defs.h"
 
 uint8_t radio_buf[0x40];
 uint8_t dbg = 0;
@@ -41,7 +42,7 @@ void spi_rx(uint8_t len, uint8_t *data) {
 }
 
 void spi_select_tx(uint8_t len, const uint8_t *data) {
-  while(digitalRead(SI_IO1) == 0) ;
+  while(digitalRead(SI_IO1) == 0) yield();
   digitalWrite(SI_CS, 0);
   spi_tx(len, data);
   digitalWrite(SI_CS, 1);
@@ -61,7 +62,8 @@ void debug(uint8_t c, uint8_t n) {
 // 3: pull-up: 0x17 (Antenna 2 Switch used for antenna diversity.)
 // irq: pull: 0x1a (High when a sync word is detected. Returns to output low after the packet is received)
 // sdo: pull-up: 0x0b (SPI. Serial data out.)
-static const uint8_t tx_config[] = {0x13, 0x60, 0x48, 0x56, 0x57, 0x5a, 0x4b};
+// irq-orig 0x5a, default 0x27
+static const uint8_t tx_config[] = {0x13, 0x60, 0x48, 0x56, 0x57, 0x67, 0x4b};
 static const uint8_t rx_config[] = {0x13, 0x60, 0x48, 0x57, 0x56, 0x67, 0x4b};
 static uint8_t si_tx_cmd_buf[6] = {0x31, 0xE6, 0x10, 0, 0, 0};
 /*
@@ -81,20 +83,22 @@ static uint8_t si_rx_cmd_buf[8] = {0x32, 0xE6, 0, 0, 0, 0, 1, 3};
 static uint8_t low_power_si_rx_cmd_buf[5] = {0x32, 0x02, 0, 0, 0x02};
 // TX_TUNE
 static uint8_t low_power_si_tx_cmd_buf[5] = {0x31, 0x02, 0x50, 0, 0x02};
-// len = 0x3F
+// len = 0x3F, sleep after RX
 static uint8_t low_power_si_rx_cmd_long_buf[] = {0x32, 0x02, 0, 0, 0x3F, 0, 1, 3};
-static const uint8_t cmd_get_int_status15[] = {0x20, 0, 0, 0};
 
 #define SET_PROPERTY_L(prop, len, ...) (len + 4), SET_PROPERTY(prop, len, __VA_ARGS__)
 #define SET_PROPERTY(prop, len, ...) 0x11, (prop >> 8), len, (prop & 0xff), __VA_ARGS__
 
 static const uint8_t radio_init[] = {
   0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot RF_POWER_UP
-  0x07, 0x13, 0x60, 0x48, 0x57, 0x56, 0x5a, 0x4b, // gpio
+  0x07, 0x13, 0x60, 0x48, 0x57, 0x56, 0x67, 0x4b, // gpio
   SET_PROPERTY_L(0x0000, 1, 0x48),
   SET_PROPERTY_L(0x0003, 1, 0x40),
-  // Interrupt config
-  SET_PROPERTY_L(0x0100, 1, 0x00),
+  // Interrupt config: Chip (4), Modem (2), Packet Handler (1)
+  // PACKET_SENT_EN 0x20, PACKET_RX_EN 0x10, CRC_ERROR_EN 0x08
+  // SYNC_DETECT_EN 0x01
+  SET_PROPERTY_L(0x0100, 3, 0x03, 0x38, 0x01),
+  // FRR (Fast Response Registers): A (Packet Handler), B (Chip Status), C & D (Disabled)
   SET_PROPERTY_L(0x0200, 4, 0x03, 0x07, 0x00, 0x00),
   // Preamble-config: [6, 20, 0, 0x50, 0x31, 0, 0, 0, 0]
   // 6 bytes preamble
@@ -140,7 +144,7 @@ static const uint8_t radio_init[] = {
   SET_PROPERTY_L(0x2300, 0x07, 0x01, 0x05, 0x0b, 0x05, 0x02, 0x00, 0x03),
   SET_PROPERTY_L(0x3000, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00),
   SET_PROPERTY_L(0x4000, 0x08, 0x38, 0x0d, 0xdd, 0xdd, 0x36, 0x9d, 0x20, 0xfe),
-  0x04, 0x20, 0, 0, 0,
+  //0x01, 0x20,
   0};
 
 static const uint8_t config_fu3[] = {
@@ -305,47 +309,24 @@ uint8_t si_getLatchedRSSI() {
   return data[3];
 }
 
-uint8_t radio_read_fifo(uint8_t len, uint8_t *dest) {
+uint8_t si_read_fifo(uint8_t len, uint8_t *dest) {
   uint8_t buf[8];
   // get payload length
   spi_select_tx(2, fifo_info0);
   uint8_t res0 = si_read_cmd_buf(2, buf);
-  
-  uint8_t ready = buf[0];
-  uint8_t has_extra = 0;
-  if (ready > 0)
-    debug('R', ready);
-  if (ready) debug('O', res0);
-  if (ready > len) has_extra = 1;
-  if (ready < len) len = ready;
-  //if (ready > len) ready = len;
-  if (res0 && ready) {
-    uint8_t * interrupts = buf;
-    spi_select_tx(4, cmd_get_int_status15);
-
-    si_read_cmd_buf(8, interrupts);
-    putchar('i'); // interrupt state
-    //for (uint8_t i=0;i<8; i++) hexout(interrupts[i]);
-
-    if ((interrupts[2] & 0x10) != 0) // RX pending
-    {
-      putchar('R');  // RX pending
-      si_read_rx_fifo_info(len, dest);
-      if (has_extra)
-        spi_select_tx(2, fifo_info_reset);
-      return len;
-    } else {
-      putchar('r');
-      if ((interrupts[2] & 0x8) != 0) {  // CRC error
-        puts("CRC");
-        si_read_rx_fifo_info(len, dest);
-        // reset RX & TX fifos
-        spi_select_tx(2, fifo_info_reset);
-      }
-      // TODO: NOT CLEAR FIFO HERE!
-      ready = 0;
-    }
+  if (!res0) {
+    putchar('F'); // FIFO_INFO FAIL
+    return 0;
   }
+
+  uint8_t ready = buf[0];
+  if (ready > len) putchar('E');  // has_extra_data in fifo
+  if (ready < len) len = ready;
+  if (ready) {
+    debug('R', ready);
+    si_read_rx_fifo_info(len, dest);
+  }
+  interrupt_state &= ~INTERRUPT_STATE_RX_READY;
   return ready;
 }
 
@@ -357,54 +338,70 @@ static const uint8_t enable_wut[] = {SET_PROPERTY(0x0004, 1, 0x5b)};
 // CAL_enable (0x01)
 static const uint8_t disable_wut[] = {SET_PROPERTY(0x0004, 1, 0)};
 
-uint8_t fu2_radio_rx(uint8_t len, uint8_t *dest) {
-  //putchar('R');
-  radio_rx_mode();
-  int16_t c = 5;
-  while(digitalRead(SI_IRQ) == 0) {
-    if (c-- > 0) { putchar('W'); }
-    radio_read_fifo(0, dest);
-    if (c >= 0) hexout(digitalRead(SI_IRQ));
-    spi_select_tx(1, cmd_get_int_status15);
-    uint8_t buf[8];
+void si_read_interrupt_status(uint8_t *buf) {
+	uint8_t data = 0x20; // SI446X_CMD_GET_INT_STATUS;
+  spi_select_tx(1, &data);
+  if (buf) {
     si_read_cmd_buf(8, buf);
-    if (c > -5) {
-      putchar('i'); // interrupt state
-      for (uint8_t i=0;i<8; i++) hexout(buf[i]);
-    }
   }
-  putchar('\n');
-  spi_select_tx(sizeof(low_power_si_rx_cmd_buf), low_power_si_rx_cmd_buf);
-  spi_select_tx(sizeof(enable_wut), enable_wut);
+}
 
-// TODO: setup interrupts!
-  putchar('W');  // Wait for SI_IRQ to become low
-  while(digitalRead(SI_IRQ) != 0) ;
-  putchar('!');  // It's LOW now.
+void si_read_interrupt_status2(uint8_t *buf) {
+  buf[0] = SI446X_CMD_GET_INT_STATUS;
+  buf[1] = buf[2] = buf[3] = 0xFF;
+  spi_select_tx(4, buf);
+  si_read_cmd_buf(8, buf);
+  }
 
+void si_interrupt_handler() {
+  uint8_t interrupts[8];
+  si_read_interrupt_status(interrupts);
+  if(interrupts[4] & (1<<SI446X_SYNC_DETECT_PEND)) {
+    si_latched_rssi = si_getLatchedRSSI();
+  }
+  if(interrupts[2] & (1<<SI446X_PACKET_RX_PEND)) {
+    interrupt_state |= INTERRUPT_STATE_RX_READY;
+  }
+  if(interrupts[2] & (1<<SI446X_CRC_ERROR_PEND)){
+    interrupt_state |= INTERRUPT_STATE_RX_ERROR;
+    //spi_select_tx(2, fifo_info_reset);
+	}
+	if(interrupts[2] & (1<<SI446X_PACKET_SENT_PEND)) {
+		interrupt_state |= INTERRUPT_STATE_TX_COMPLETE;
+  }
+}
+
+void si_stop_rx() {
   spi_select_tx(sizeof(disable_wut), disable_wut);
-  si_latched_rssi = si_getLatchedRSSI();
-
-  return radio_read_fifo(len, dest);
+  radio_halt();
 }
 
-uint8_t fu2_radio_rx_long(uint8_t len, uint8_t *dest) {
+uint8_t si_get_state() {
+  uint8_t cmd = SI446X_CMD_REQUEST_DEVICE_STATE;
+  spi_select_tx(1, &cmd);
+  si_read_cmd_buf(1, &cmd);
+  return cmd;
+}
+
+void fu2_start_rx(uint8_t long_mode) {
   radio_rx_mode();
-  uint8_t c = 5;
-  while(digitalRead(SI_IRQ) == 0){
-    if (c-- > 0) putchar('w');
-    radio_read_fifo(0, dest);
-    spi_select_tx(4, cmd_get_int_status15);
+  //debug('0', PC_IDR);
+  if (interrupt_state & (INTERRUPT_STATE_RX_READY | INTERRUPT_STATE_RX_ERROR)) {
+    spi_select_tx(2, fifo_info_reset);
+    interrupt_state &= ~(INTERRUPT_STATE_RX_READY | INTERRUPT_STATE_RX_ERROR);
   }
-  spi_select_tx(sizeof(low_power_si_rx_cmd_long_buf), low_power_si_rx_cmd_long_buf);
-
-  //putchar('W');  // Wait for SI_IRQ to become low
-  while(digitalRead(SI_IRQ) != 0) ;
-  //putchar('!');  // It's LOW now.
-
-  return radio_read_fifo(len, dest);
+  if (long_mode) {
+    spi_select_tx(sizeof(low_power_si_rx_cmd_long_buf), low_power_si_rx_cmd_long_buf);
+  } else {
+    // short mode with WUT
+    //debug('1', PC_IDR);
+    spi_select_tx(sizeof(low_power_si_rx_cmd_buf), low_power_si_rx_cmd_buf);
+    //debug('2', PC_IDR);
+    spi_select_tx(sizeof(enable_wut), enable_wut);
+    radio_halt();
+    //debug('3', PC_IDR);
+  }
 }
-
 
 // len is sizeof dest and must be >= 8 since we reuse the buffer
 uint8_t fu3_radio_rx(uint8_t len, uint8_t *dest) {
@@ -413,7 +410,7 @@ uint8_t fu3_radio_rx(uint8_t len, uint8_t *dest) {
   while(digitalRead(SI_IRQ) != 0) ;
   putchar('!');  // It's LOW now.
   dbg = 1;
-  uint8_t ready = radio_read_fifo(len, dest);
+  uint8_t ready = si_read_fifo(len, dest);
 
   uint8_t device_state[3];
   dbg = 1;

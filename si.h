@@ -11,6 +11,13 @@
 #define STATE_SI_IO1 PIN6
 
 extern uint8_t interrupt_state;
+
+// flag cleared when reading fifo or starting new RX
+#define INTERRUPT_STATE_RX_READY 1
+// flag cleared when starting new RX
+#define INTERRUPT_STATE_RX_ERROR 2
+#define INTERRUPT_STATE_TX_COMPLETE 4
+
 extern uint8_t si_latched_rssi;
 extern uint8_t radio_buf[0x40];
 
@@ -25,8 +32,14 @@ void radio_tx(uint8_t len, const uint8_t *data);
 // returns the amount of bytes received
 void hexout16(uint16_t data);
 void hexout(uint8_t data);
+void fu2_start_rx(uint8_t long_mode);
+uint8_t si_read_fifo(uint8_t len, uint8_t *dest);
 uint8_t fu2_radio_rx(uint8_t len, uint8_t *dest);
+void si_stop_rx();
+void si_interrupt_handler();
 uint8_t fu2_radio_rx_long(uint8_t len, uint8_t *dest);
+uint8_t si_get_state();
+extern void si_read_interrupt_status2(uint8_t *buf);
 
 
 uint8_t radio_rx(uint8_t len, uint8_t *dest);

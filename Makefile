@@ -21,7 +21,7 @@ $(ARDUINO_LIB): $(ARDUINO)/src/*
 static.lib.S: mklib.py static.lib.ihx
 	python3 mklib.py static.lib.map > $@
 
-static.lib.ihx: si.rel swimcat/swimcat.rel
+static.lib.ihx: si.rel swimcat/swimcat.rel lib.rel
 
 static.lib.ihx: $(ARDUINO_LIB)
 	$(CC) $(CFLAGS) -larduino $(filter-out $<,$^) --code-loc 0x9000 --stack-loc 0x400 -o $@
