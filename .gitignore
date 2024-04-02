@@ -1,0 +1,15 @@
+# SDCC stuff
+*.asm
+*.cdb
+*.ihx
+*.lnk
+*.lk
+*.lst
+*.map
+*.mem
+*.rel
+*.rst
+*.sym
+# Build stuff
+*.needsflash
+static.lib.*

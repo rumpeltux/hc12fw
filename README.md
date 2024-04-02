@@ -20,6 +20,12 @@ change channel and TX power.
 Some efforts towards FU-2 have started but are not quite there yet in the
 `fu2-devel` branch.
 
+## Dependencies
+
+https://github.com/ZakKemble/Si446x (for Si446x/Si446x/Si446x_defs.h)
+https://github.com/rumpeltux/stm8-arduino
+https://github.com/rumpeltux/stm8-swimcat
+
 ## API
 
 See `si.h` for the available APIs. Notably: sending and receiving radio.
