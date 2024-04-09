@@ -39,9 +39,10 @@ To build the module, just run: `make`
 
 For flashing we use [esp-stlink](https://github.com/rumpeltux/esp-stlink) (pull requests for other flash methods are welcome).
 
-To flash your code to the device run `make flash` ().
+To flash your code to the device run `make flash`.
+This will flash the code, but pause execution, so that no output is lost.
 
-To read the console output, run `swimcat/swimcat.py`.
+To read the console output, run `swimcat/swimcat.py --continue`.
 
 ## API
 
