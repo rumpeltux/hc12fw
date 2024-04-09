@@ -33,8 +33,10 @@ $(TARGET).ihx: $(ARDUINO_LIB) $(TARGET).rel static.lib.rel $(ARDUINO)/src/main.r
 
 flash: $(TARGET).ihx static.lib.ihx
 	for i in $^; do \
-	  [ -e $$i.needsflash ] && esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash; \
+	  [ -e $$i.needsflash ] && swimcat/esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash; \
 	done
 
 clean:
+	$(MAKE) -C arduino clean
+	$(MAKE) -C swimcat clean
 	rm -f *.asm *.cdb *.ihx *.lnk *.lk *.lst *.map *.mem *.rel *.rst *.sym *.needsflash static.lib.*

@@ -20,11 +20,28 @@ change channel and TX power.
 Some efforts towards FU-2 have started but are not quite there yet in the
 `fu2-devel` branch.
 
-## Dependencies
+## Installation
 
-https://github.com/ZakKemble/Si446x (for Si446x/Si446x/Si446x_defs.h)
-https://github.com/rumpeltux/stm8-arduino
-https://github.com/rumpeltux/stm8-swimcat
+```shell
+# install required build tools
+sudo apt-get install sdcc make
+# grab all submodule dependencies
+git submodule update --init --recursive
+# build the esp-stlink library
+make -C swimcat/esp-stlink/lib
+# make the esp-stlink functionality availbale
+export PYTHONPATH=$PYTHONPATH:swimcat/esp-stlink/python
+```
+
+To build the module, just run: `make`
+
+## Flashing
+
+For flashing we use [esp-stlink](https://github.com/rumpeltux/esp-stlink) (pull requests for other flash methods are welcome).
+
+To flash your code to the device run `make flash` ().
+
+To read the console output, run `swimcat/swimcat.py`.
 
 ## API
 

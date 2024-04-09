@@ -1,0 +1,6 @@
+[submodule "arduino"]
+	path = arduino
+	url = https://github.com/rumpeltux/stm8-arduino.git
+[submodule "swimcat"]
+	path = swimcat
+	url = https://github.com/rumpeltux/stm8-swimcat.git
