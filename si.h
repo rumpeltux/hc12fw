@@ -13,7 +13,7 @@
 extern uint8_t interrupt_state;
 
 // initialize the radio. Returns 0 on failure.
-uint8_t radio_init();
+uint8_t radio_init(void);
 
 // submits a packet
 // for compatibility with original HC-12 devices, make sure len=20
@@ -23,8 +23,8 @@ void radio_tx(uint8_t len, const uint8_t *data);
 // puts the device into RX state if not already
 uint8_t radio_rx(uint8_t len, uint8_t *dest);
 
-void radio_wakeup();
-void radio_halt();
+void radio_wakeup(void);
+void radio_halt(void);
 
 // Internal APIs
 

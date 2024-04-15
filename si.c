@@ -191,7 +191,7 @@ uint16_t si_get_chip(void) {
   return chip_info[1] << 8 | chip_info[2];
 }
 
-uint8_t radio_init() {
+uint8_t radio_init(void) {
   digitalWrite(SI_CS, 1);
   pinMode(SI_CS, OUTPUT);
   
@@ -245,7 +245,7 @@ void si_change_state(uint8_t state) {
   digitalWrite(SI_CS, 1);
 }
 
-void wait_radio_tx_done() {
+void wait_radio_tx_done(void) {
   uint16_t i=0;
   while(digitalRead(SI_IO0) == 0 && ++i) ;
   uint8_t fail=i == 0;
@@ -254,7 +254,7 @@ void wait_radio_tx_done() {
   if (fail) si_debug('T', fail);
 }
 
-void radio_rx_mode() {
+void radio_rx_mode(void) {
   spi_select_tx(sizeof(rx_config), rx_config);
 }
 
@@ -348,11 +348,11 @@ rx_exit:
   return ready_bytes;
 }
 
-void radio_wakeup() {
+void radio_wakeup(void) {
   // TODO (may not be necessary)
 }
 
-void radio_halt() {
+void radio_halt(void) {
   // TODO: disable 32K osc
   si_change_state(1);  // go to sleep
 }

@@ -13,18 +13,18 @@ uint8_t radio_buf[21];
 
 extern void swimcat_flush();
 
-void on_portC() {  // IO1 / IRQ
+void on_portC(void) {  // IO1 / IRQ
   interrupt_state = PIN3;
   if (digitalRead(SI_IRQ) == 0) {
     interrupt_state |= STATE_SI_IRQ;
   }
 }
 
-void on_portB() {
+void on_portB(void) {
   interrupt_state = PIN2;
 }
 
-void setup() {
+void setup(void) {
   SERIAL_INIT(9600);
   puts("HC12\r");
 
@@ -59,7 +59,7 @@ void setup() {
 #endif
 }
 
-void loop() {
+void loop(void) {
   // flush out pending logs, because swimcat doesn’t work while were in sleep mode
   swimcat_flush();
 
