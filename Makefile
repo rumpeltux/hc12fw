@@ -33,7 +33,7 @@ $(TARGET).ihx: $(ARDUINO_LIB) $(TARGET).rel static.lib.rel $(ARDUINO)/src/main.r
 
 flash: $(TARGET).ihx static.lib.ihx
 	for i in $^; do \
-	  [ -e $$i.needsflash ] && swimcat/esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash; \
+	  [ -e $$i.needsflash ] && swimcat/esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash || true; \
 	done
 
 clean:

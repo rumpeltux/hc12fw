@@ -1,11 +1,5 @@
 # HC-12 Firmware Base
 
-## EXPERIMENTAL / UNFINISHED
-
-The code in this repository is absolutely experimental and may not work for you!
-Since I stopped active development, I’m releasing this WIP version for others to
-pick up.
-
 ## About
 
 You can use this repository as a base to build your own HC-12 firmware.
@@ -24,7 +18,7 @@ Some efforts towards FU-2 have started but are not quite there yet in the
 
 ```shell
 # install required build tools
-sudo apt-get install sdcc make
+sudo apt-get install sdcc build-essential
 # grab all submodule dependencies
 git submodule update --init --recursive
 # build the esp-stlink library
@@ -32,6 +26,10 @@ make -C swimcat/esp-stlink/lib
 # make the esp-stlink functionality availbale
 export PYTHONPATH=$PYTHONPATH:swimcat/esp-stlink/python
 ```
+
+IMPORTANT: Make sure that your `sdcc --version` is at least 4.4.
+There are known compiler bugs in the previous version that will render the
+firmware non-functional.
 
 To build the module, just run: `make`
 
@@ -54,30 +52,31 @@ for convenience. All its APIs should also be readily usable.
 
 ## Demo
 
-The default application implements a simple echo service.
-It sends `Hello\r\n` on boot and otherwise resends each packet as received.
+The default application (`hc12.c`) implements a simple echo service.
+It sends `HC12 ready\r\n` on boot and otherwise resends each packet as received.
+
+This is useful as a communication and range test.
 
 ## Restoring the original firmware
 
-To create a backup that you can restore, follow the firmware extraction
+For some versions of the chip, you can follow the firmware extraction
 instructions in https://github.com/rumpeltux/hc12
 
 ## FW Structure
-Radio interrupts. Interrupt handler sets flags:
 
-* RX pending
-* TX complete
+* `hc12.c` is the main application file and making use of [stm8-arduino](https://github.com/rumpeltux/stm8-arduino)
+* `si.c` implements the radio interactions.
 
-Main loop:
-
-TODO
+`si.c` and other libraries that are unlikely to change are bundled to a separate
+section of the firmware, so that you don’t need to reflash them all the time
+during development.
 
 ## Available GPIO PINs
 
 The following STM8 PINs are available for you to use:
 A1,A2,A3\* B5(SET) D1\*,D3,D4,D5(TX),D6(RX)
 
-* A3: signaling chip boot readiness (TODO: verify if this is needed)
+* A3: the original FW used this for signaling chip boot readiness
 * D1: SWIM used for programming (already has testport solder pad)
 
 TODO: verify D4 can be used
@@ -88,6 +87,7 @@ A3,D3 are at the chip’s edge, so their legs are more easily accessible for sol
 ## Useful references
 
 * [Si4463 Datasheet](https://www.silabs.com/documents/public/data-sheets/Si4464-63-61-60.pdf)
+* [Si4463 API Reference (zip)](http://www.silabs.com/documents/public/application-notes/EZRadioPRO_REVC2_API.zip)
 * [STM8S Datasheet](https://www.st.com/resource/en/datasheet/stm8s103f2.pdf)
 * Pinout (all partially incomplete, but still helpful).
   * https://twitter.com/cathedrow/status/845044463118553091/photo/1

@@ -2,18 +2,18 @@
 #include "si.h"
 #include <stdio.h>
 
-uint8_t radio_buf[0x40];
-uint8_t dbg = 0;
+uint8_t si_dbg = 0;
 
-static void _hexout(uint8_t nibble) {
+uint8_t si_hex(uint8_t nibble) {
+  if (nibble > 0xf) { return '.'; }
   nibble += '0';
-  if (nibble > '9') nibble += 39;
-  putchar(nibble);
+  if (nibble > '9') nibble += 'a' - '0' - 10;
+  return nibble;
 }
 
 void hexout(uint8_t byte) {
-  _hexout(byte >> 4);
-  _hexout(byte & 0xf);
+  putchar(si_hex(byte >> 4));
+  putchar(si_hex(byte & 0xf));
 }
 
 void hexout16(uint16_t data) {
@@ -21,44 +21,63 @@ void hexout16(uint16_t data) {
   hexout(data);
 }
 
-void spi_tx(uint8_t len, const uint8_t *data) {
-  if (dbg) {
-    putchar('S'); hexout(len); putchar(':');
-    for(uint8_t i=0; i<len; i++) {
-      hexout(data[i]);
-    }
-    puts("\r");
-  }
+void si_debug(uint8_t c, uint8_t n) {
+  putchar(c); hexout(n); puts("\r");
+}
+
+static void spi_tx(uint8_t len, const uint8_t *data) {
   for(uint8_t i=0; i<len; i++) {
     spi_transfer(data[i]);
   }
 }
 
-void spi_rx(uint8_t len, uint8_t *data) {
+static void spi_rx(uint8_t len, uint8_t *data) {
   for(uint8_t i=0; i<len; i++) {
     data[i] = spi_transfer(0xFF);
   }
 }
 
-void spi_select_tx(uint8_t len, const uint8_t *data) {
+static void spi_select_tx(uint8_t len, const uint8_t *data) {
   while(digitalRead(SI_IO1) == 0) ;
   digitalWrite(SI_CS, 0);
   spi_tx(len, data);
   digitalWrite(SI_CS, 1);
 }
 
-void debug(uint8_t c, uint8_t n) {
-  putchar(c); hexout(n); puts("\r");
+// Returns 0 on timeout while waiting for cts signal.
+static uint8_t si_read_cmd_buf(uint8_t len, uint8_t *dest) {
+  uint16_t i=0;
+  uint8_t ctsVal;
+  do {
+    digitalWrite(SI_CS, 0);
+    spi_transfer(0x44);
+    ctsVal = spi_transfer(0xFF);
+    if (ctsVal == 0xFF) {
+      spi_rx(len, dest);
+    }
+    digitalWrite(SI_CS, 1);
+  } while(++i && ctsVal != 0xFF);
+  if (!i) putchar('c');
+  return !!i;
 }
 
-// 20, 8, 16, 17, 1a, b
-// 32, 8, 22, 23, 26, 11
-// tx-high, cmd-done-high, ant1, ant2, sync-high, SDO
-// GPIO-config
+// HC12 compatible radio params.
+
+// GPIO config:
+// GPIO0: TX_STATE (high while in TX)
+// GPIO1: CTS (high when command handler is ready to receive the next signal)
+// GPIO2/3: used for radio control (2: ANTENNA_1_SW, 3: ANTENNA_2_SW)
+// NIRQ: SYNC_WORD_DETECT (high when a Sync Word is detected, and returns low after the packet is received)
+// SDO: POR (output goes low during Power-On Reset and goes high upon completion of POR)
 static const uint8_t tx_config[] = {0x13, 0x60, 0x48, 0x56, 0x57, 0x5a, 0x4b};
 static const uint8_t rx_config[] = {0x13, 0x60, 0x48, 0x57, 0x56, 0x5a, 0x4b};
-static uint8_t si_tx_cmd_buf[6] = {0x31, 0xE6, 0x10, 0, 0, 0};
+
+
+// Args: Channel=2, Condition, tx_len (16bit_le), num_repeat
+static uint8_t si_tx_cmd_buf[6] = {0x31, 2, 0x10, 0, 0, 0};
+
 /*
+State Enum:
 0 = No change.
 1 = Sleep state.
 2 = Spi Active state.
@@ -69,18 +88,19 @@ static uint8_t si_tx_cmd_buf[6] = {0x31, 0xE6, 0x10, 0, 0, 0};
 7 = TX state.
 8 = RX state.
 */
-// Args: Channel, Start delayed, len high, len low, timeout_state=0, valid_state=3, invalid_state=3
-static uint8_t si_rx_cmd_buf[8] = {0x32, 0xE6, 0, 0, 0, 0, 1, 3};
+// Args: Channel=2, Start delayed, len (16bit_le), timeout_state=0, valid_state=3, invalid_state=3
+static uint8_t si_rx_cmd_buf[8] = {0x32, 2, 0, 0, 0, 0, 3, 3};
 // len = 2
 static uint8_t low_power_si_rx_cmd_buf[5] = {0x32, 0x02, 0, 0, 0x02};
 // TX_TUNE
 static uint8_t low_power_si_tx_cmd_buf[5] = {0x31, 0x02, 0x50, 0, 0x02};
+
 static const uint8_t cmd_get_int_status15[] = {0x20, 0, 0, 0};
 
 #define SET_PROPERTY_L(prop, len, ...) (len + 4), SET_PROPERTY(prop, len, __VA_ARGS__)
 #define SET_PROPERTY(prop, len, ...) 0x11, (prop >> 8), len, (prop & 0xff), __VA_ARGS__
 
-static const uint8_t radio_init[] = {
+static const uint8_t config_init[] = {
   0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot RF_POWER_UP
   0x07, 0x13, 0x60, 0x48, 0x57, 0x56, 0x5a, 0x4b, // gpio
   SET_PROPERTY_L(0x0000, 1, 0x48),
@@ -151,16 +171,27 @@ static const uint8_t config_fu2[] = {
 const uint8_t power_consts[]  = {4, 6, 9, 13, 18, 26, 40, 127};
 
 void si_set_tx_power(uint8_t power) {
-  uint8_t cmd[] = {0x11, 0x22, 1, 1, power};
-  spi_select_tx(5, cmd);
+  uint8_t cmd[] = {SET_PROPERTY(0x2201, 1, power)};
+  spi_select_tx(sizeof(cmd), cmd);
 }
 
 void si_set_channel(uint8_t channel) {
+  channel++;
   si_tx_cmd_buf[1] = channel;
   si_rx_cmd_buf[1] = channel;
 }
 
-void init_radio() {
+// Returns the chip part number, e.g. 0x4463
+uint16_t si_get_chip(void) {
+  uint8_t cmd[] = {0x01};  // GET_CHIP_INFO
+  spi_select_tx(sizeof(cmd), cmd);
+  uint8_t chip_info[8];
+  uint8_t chip_info_success = si_read_cmd_buf(8, chip_info);
+  if (!chip_info_success) return 0;
+  return chip_info[1] << 8 | chip_info[2];
+}
+
+uint8_t radio_init() {
   digitalWrite(SI_CS, 1);
   pinMode(SI_CS, OUTPUT);
   
@@ -169,29 +200,41 @@ void init_radio() {
   pinMode(SI_IO1, INPUT);
 
   spi_begin();
-  putchar('w');
-  while(digitalRead(SI_IO1) == 0) ;
-  putchar('!');
+  // Set speed to 8MHz (Si4463 is max 10MHz)
+  SPI_CR1 = 0x44;
 
-  const uint8_t *cmd_p = radio_init;
+  // Wait until radio chip is ready to respond.
+  while(digitalRead(SI_IO1) == 0) yield();
+
+  // Sanity check to confirm that peripheral communication
+  // and the radio chip are working.
+  int64_t chip = si_get_chip();
+  if (chip != 0x4463) {
+    // unexpected / unsupport chip (or read failure when 0)
+    puts("CHIP:");
+    hexout16(chip);
+    return 0;
+  }
+
+  // Send initial radio params.
+  const uint8_t *cmd_p = config_init;
   uint8_t len;
   while((len = *cmd_p) != 0) {
-    debug('c', len);
     spi_select_tx(len, ++cmd_p);
     cmd_p += len;
   }
-  
-  cmd_p = config_fu2;
+
+  // Send mode specific radio params (for now only FU3 is know to be working)
+  cmd_p = config_fu3;
   do {
     len = cmd_p[2] + 4;
-    debug('C', len);
     spi_select_tx(len, cmd_p);
     cmd_p += len;
   } while (*cmd_p != 0);
-  
-  si_set_tx_power(0x7F);  // full power
-  si_set_channel(2);
-  puts("RX\r");
+
+  // Reasonable default params (compatible with HC12’s AT+DEFAULT)
+  si_set_channel(1);
+  return 1;
 }
 
 // 1: sleep
@@ -203,58 +246,37 @@ void si_change_state(uint8_t state) {
 }
 
 void wait_radio_tx_done() {
-  uint8_t i=0;
-  while(digitalRead(SI_IO0) == 0 && ++i) hexout(i);
-  putchar(','); // SI_IO0 is now high
-  while(digitalRead(SI_IO0) != 0 && ++i) hexout(i);
-  putchar('!'); // SI_IO0 in now low
+  uint16_t i=0;
+  while(digitalRead(SI_IO0) == 0 && ++i) ;
+  uint8_t fail=i == 0;
+  while(digitalRead(SI_IO0) != 0 && ++i) ;
+  if (!i) fail |= 2;
+  if (fail) si_debug('T', fail);
 }
 
 void radio_rx_mode() {
-  dbg = 1;
   spi_select_tx(sizeof(rx_config), rx_config);
-  puts("\r");
 }
 
 void radio_tx(uint8_t len, const uint8_t *data) {
-  dbg = 0;
-  putchar('T'); // TX mode
   spi_select_tx(sizeof(tx_config), tx_config);
 
+  // Fill TX Fifo with data.  
   digitalWrite(SI_CS, 0);
   spi_transfer(0x66); // TX_FIFO
   spi_tx(len, data);
   digitalWrite(SI_CS, 1);
-  putchar('1'); // FIFO filled
 
+  // Issue TX command
   si_tx_cmd_buf[4] = len;
   spi_select_tx(sizeof(si_tx_cmd_buf), si_tx_cmd_buf);
-  putchar('2'); // TX cmd issued
-  
+
   wait_radio_tx_done();
   radio_rx_mode();
 }
 
 static const uint8_t fifo_info0[] = {0x15, 0};
 static const uint8_t fifo_info3[] = {0x15, 3};
-
-static uint8_t si_read_cmd_buf(uint8_t len, uint8_t *dest) {
-  uint16_t i=1;
-  while(++i) {
-    digitalWrite(SI_CS, 0);
-    spi_transfer(0x44);
-    uint8_t ctsVal = spi_transfer(0xFF);
-    if (ctsVal == 0xFF) {
-      if (len) {
-        spi_rx(len, dest);
-      }
-      digitalWrite(SI_CS, 1);
-      break;
-    }
-    digitalWrite(SI_CS, 1);
-  }
-  return !!i;
-}
 
 static void si_read_rx_fifo_info(uint8_t len, uint8_t *dest) {
   digitalWrite(SI_CS, 0);
@@ -265,56 +287,65 @@ static void si_read_rx_fifo_info(uint8_t len, uint8_t *dest) {
 
 static const uint8_t request_device_state[] = {0x33};
 
-// len is sizeof dest and must be >= 8 since we reuse the buffer
-uint8_t radio_rx(uint8_t len, uint8_t *dest) {
-  si_rx_cmd_buf[4] = len;
-  putchar('W');  // Wait for SI_IRQ to become low
-  while(digitalRead(SI_IRQ) != 0) ;
-  putchar('!');  // It's LOW now.
-  dbg = 1;
-  // get payload length
-  spi_select_tx(2, fifo_info0);
-  uint8_t res0 = si_read_cmd_buf(2, dest);
-  
-  uint8_t ready = dest[0];
-  debug('R', ready);
-  if (res0 && ready) {
-    spi_select_tx(4, cmd_get_int_status15);
-    uint8_t *interrupts = dest + 1;
-    si_read_cmd_buf(8, interrupts);
+static void si_dump_interrupt_state(uint8_t *interrupts) {
+  if (si_dbg) {
     putchar('I'); // interrupt state
     for (uint8_t i=0;i<8; i++) hexout(interrupts[i]);
-
-    if ((interrupts[2] & 0x10) != 0) // RX pending
-    {
-      si_read_rx_fifo_info(ready, dest);
-    } else {
-      if ((interrupts[2] & 0x8) != 0) {  // CRC error
-        // reset RX & TX fifos
-        spi_select_tx(2, fifo_info3);
-      }
-      ready = 0;
-    }
   }
+}
 
-  uint8_t device_state[3];
-  dbg = 1;
-  // Requests the current state of the device and lists pending TX and RX requests
-  spi_select_tx(1, request_device_state);
-  uint8_t res1 = si_read_cmd_buf(3, device_state);
-  // Old AN625: state, channel, post rx, post tx
-  // New AN625: state, channel
-  if(res0) putchar('0');  // fifo info completed success
-  if(res1) {
-    debug('S', device_state[0]); // current state?
-  }
-  if (res1 && (device_state[0] & 0xF) != 8) { // not in RX state
-    // Start next RX.
+static void si_ensure_rx(void) {
+   uint8_t device_state[3];
+   // Requests the current state of the device and lists pending TX and RX requests
+   spi_select_tx(1, request_device_state);
+  uint8_t device_state_success = si_read_cmd_buf(2, device_state);
+  // Old AN625: state, channel
+  if (device_state_success && (device_state[0] & 0xF) != 8) { // not in RX state
+     // Start next RX.
     spi_select_tx(sizeof(si_rx_cmd_buf), si_rx_cmd_buf);
+   }
+}
+
+// len is sizeof dest and must be >= 8 since we reuse the buffer
+uint8_t radio_rx(uint8_t len, uint8_t *dest) {
+  uint8_t ready_bytes = 0;
+  si_rx_cmd_buf[4] = len;
+  while (digitalRead(SI_IRQ) != 0)
+    ;
+
+  // get payload length
+  spi_select_tx(2, fifo_info0);
+  uint8_t fifo_info_success = si_read_cmd_buf(2, dest);
+  if (!fifo_info_success)
+    goto rx_exit;
+
+  ready_bytes = dest[0];
+  if (!ready_bytes)
+    goto rx_exit;
+
+  // Check pending interrupts to confirm that data is available.
+  spi_select_tx(4, cmd_get_int_status15);
+  uint8_t *interrupts = dest;
+  uint8_t int_success = si_read_cmd_buf(8, interrupts);
+  if (!int_success) {
+    ready_bytes = 0;
+    goto rx_exit;
   }
-  putchar('!');
-  puts("\r");
-  return ready;
+  si_dump_interrupt_state(interrupts);
+
+  if ((interrupts[2] & 0x10) != 0) { // RX pending
+    si_read_rx_fifo_info(ready_bytes, dest);
+  } else {
+    if ((interrupts[2] & 0x8) != 0) { // CRC error
+      // reset RX & TX fifos
+      spi_select_tx(2, fifo_info3);
+    }
+    ready_bytes = 0;
+  }
+
+rx_exit:
+  si_ensure_rx();
+  return ready_bytes;
 }
 
 void radio_wakeup() {
