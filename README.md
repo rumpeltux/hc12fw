@@ -87,7 +87,7 @@ A3,D3 are at the chip’s edge, so their legs are more easily accessible for sol
 ## Useful references
 
 * [Si4463 Datasheet](https://www.silabs.com/documents/public/data-sheets/Si4464-63-61-60.pdf)
-* [Si4463 API Reference (zip)](http://www.silabs.com/documents/public/application-notes/EZRadioPRO_REVC2_API.zip)
+* [Si4463 API Reference (zip)](http://www.silabs.com/documents/public/application-notes/EZRadioPRO_REVB1_API.zip)
 * [STM8S Datasheet](https://www.st.com/resource/en/datasheet/stm8s103f2.pdf)
 * Pinout (all partially incomplete, but still helpful).
   * https://twitter.com/cathedrow/status/845044463118553091/photo/1
