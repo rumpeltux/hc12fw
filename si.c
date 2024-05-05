@@ -89,7 +89,7 @@ static uint8_t si_read_cmd_buf(uint8_t len, uint8_t *dest) {
 static const uint8_t tx_config[] = {0x13, 0x60, 0x48, 0x56, 0x57, 0x67, 0x4b};
 static const uint8_t rx_config[] = {0x13, 0x60, 0x48, 0x57, 0x56, 0x67, 0x4b};
 
-// Args: Channel=2, Condition (next_state=8 (RX)), tx_len (16bit_le), num_repeat
+// Args: Channel=2, Condition (next_state=1 (sleep/standby) << 4), tx_len (16bit_le), num_repeat
 static uint8_t si_tx_cmd_buf[6] = {0x31, 2, 0x10, 0, 0, 0};
 
 /*
@@ -121,6 +121,8 @@ static const uint8_t cmd_clear_fifo[] = {0x15, 3};
 #define SET_PROPERTY_L(prop, len, ...) (len + 4), SET_PROPERTY(prop, len, __VA_ARGS__)
 #define SET_PROPERTY(prop, len, ...) 0x11, (prop >> 8), len, (prop & 0xff), __VA_ARGS__
 
+static const uint8_t cmd_set_pkt1_len[] = {SET_PROPERTY(0x120e, 1, 1)};
+
 static const uint8_t config_init[] = {
   0x07, 0x02, 0x01, 0x00, 0x01, 0xc9, 0xc3, 0x80, // boot RF_POWER_UP
   0x07, 0x13, 0x60, 0x48, 0x57, 0x56, 0x43, 0x4b, // gpio
@@ -135,11 +137,19 @@ static const uint8_t config_init[] = {
   // 0x20 = Preamble tx_length register is in bytes
   // 0x01 = Use standard preamble of 1010 (default)
   SET_PROPERTY_L(0x1000, 0x09, 0x06, 0x14, 0x00, 0x50, 0x31, 0x00, 0x00, 0x00, 0x00),
+  // SYNC_CONFIG: 0x01: 16 bits sync word
   SET_PROPERTY_L(0x1100, 0x05, 0x21, 0x89, 0x89, 0x00, 0x00),
+  // ITU-T CRC8, Seed = 0xFF
   SET_PROPERTY_L(0x1200, 1, 0x81),
   SET_PROPERTY_L(0x1206, 1, 0x02),
-  SET_PROPERTY_L(0x1208, 3, 0x00, 0x00, 0x00),
-  SET_PROPERTY_L(0x120d, 0x0c, 0x00, 0x40, 0x06, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00),
+  // Length field stored in FIFO. DataField2 will contain data.
+  // Length adjust: -5 so that length=0x18 (24) has a data section of (19 bytes) and thus a total packet length of 20
+  // for compatibility with original HC12 firmware.
+  SET_PROPERTY_L(0x1208, 3, 8 | 2, 0x00, (uint8_t) -5),
+  // Field 1 length: 1 (length byte) (in TX everything is stuffed into this field according to TX_LEN command option)
+  // CRC: enabled for this field, not checked in RX, but sent in TX
+  // Field 2 max length: 0x3F (0x40 - 1 length byte)
+  SET_PROPERTY_L(0x120d, 0x0c, 0x00, 0x01, 0x06, 0xa2, 0x00, 0x3f, 0x02, 0x0a, 0x00, 0x00, 0x00, 0x00),
   SET_PROPERTY_L(0x1219, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00),
   SET_PROPERTY_L(0x2000, 0x0c, 0x03, 0x00, 0x07, 0x26, 0x25, 0xa0, 0x01, 0xc9, 0xc3, 0x80, 0x00, 0x22),
   SET_PROPERTY_L(0x200c, 1, 0x22),
@@ -189,6 +199,14 @@ static const uint8_t config_fu2[] = {
   SET_PROPERTY(0x2201, 1, 0x7f),
   0
 };
+
+uint8_t si_get_property(uint16_t property) {
+  uint8_t cmd[] = {0x12, property >> 8, 1, property & 0xff};
+  uint8_t res;
+  spi_select_tx(sizeof(cmd), cmd);
+  si_read_cmd_buf(1, &res);
+  return res;
+}
 
 const uint8_t power_consts[]  = {4, 6, 9, 13, 18, 26, 40, 127};
 
@@ -351,6 +369,9 @@ static const uint8_t request_device_state[] = {0x33};
 
 void radio_start_rx(uint8_t len) {
   si_rx_cmd_buf[4] = len;
+  if (len == 0) {
+    spi_select_tx(sizeof(cmd_set_pkt1_len), cmd_set_pkt1_len);
+  }
   spi_select_tx(sizeof(si_rx_cmd_buf), si_rx_cmd_buf);
 }
 
@@ -383,14 +404,15 @@ void si_notify_nirq(void) {
 }
 
 uint8_t radio_rx(uint8_t len, uint8_t *dest) {
-  if (si_get_state() != SI_STATE_RX || si_rx_cmd_buf[4] != len) {
+  if (si_get_state() != SI_STATE_RX ||
+      (si_rx_cmd_buf[4] != 0 && si_rx_cmd_buf[4] != len)) {
     spi_select_tx(sizeof(cmd_clear_fifo), cmd_clear_fifo);
     radio_start_rx(len);
   }
 
   // In case the RX fifo buffered a previous packet, retrieve this first.
   int8_t rxfifo = si_get_rx_fifo_size();
-  if (rxfifo >= len) {
+  if (rxfifo >= (int8_t) len) {
     // There’s already data there from previous packet(s) that we missed.
     // retrieve this without checking CRC because those flags may be invalid.
     si_read_rx_fifo(len, dest);
@@ -406,6 +428,7 @@ uint8_t radio_rx(uint8_t len, uint8_t *dest) {
   if ((int_status & 0x8) != 0) { // CRC error
     // Clear fifos to discard bad data.
     spi_select_tx(sizeof(cmd_clear_fifo), cmd_clear_fifo);
+    return len;
   }
 
   if ((int_status & 0x10) != 0) { // RX pending

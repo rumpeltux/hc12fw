@@ -43,8 +43,8 @@ void setup(void) {
   // \x0c Is the length of the string (max: 17 (0x11))
   radio_tx(20, "\x18\x0c" "HC12 ready\r\n");
 
-  // Start RX:
-  radio_start_rx(0x14);
+  // Start variable length RX
+  radio_start_rx(0);
 
 #ifdef RANGE_TEST
   // Power and range test (disabled by default).
@@ -90,4 +90,12 @@ rx:
   // (As the chip is not full duplex, this implies that we may miss additional
   // packets that we might receive during transmission.)
   radio_tx(0x14, radio_buf);
+
+  // To send a shorter packet that the variable-length receiver will recognize:
+  // uint8_t len = strlen(payload) + 2;
+  // radio_buf[0] = len + 4;
+  // radio_tx(len, radio_buf);
+
+  // Restart variable length RX.
+  radio_start_rx(0);
 }
