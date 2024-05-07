@@ -36,6 +36,10 @@ void si_debug(uint8_t c, uint8_t n) {
   putchar(c); hexout(n); puts("\r");
 }
 
+static void si_err(uint8_t c) {
+  putchar(c);
+}
+
 static void spi_tx(uint8_t len, const uint8_t *data) {
   for (uint8_t i = 0; i < len; i++) {
     spi_transfer(data[i]);
@@ -74,7 +78,7 @@ static uint8_t si_read_cmd_buf(uint8_t len, uint8_t *dest) {
     digitalWrite(SI_CS, 1);
   } while (++i && ctsVal != 0xFF);
   if (!i)
-    putchar('c');
+    si_err('c');
   return !!i;
 }
 
@@ -260,15 +264,16 @@ uint8_t radio_init(void) {
   SPI_CR1 = 0x44;
 
   // Wait until radio chip is ready to respond.
+  // Should this hang here. Make sure to power-cycle the chip.
   waitCts();
 
   // Sanity check to confirm that peripheral communication
   // and the radio chip are working.
-  int64_t chip = si_get_chip();
+  uint16_t chip = si_get_chip();
   if (chip != 0x4463) {
     // unexpected / unsupport chip (or read failure when 0)
-    puts("CHIP:");
-    hexout16(chip);
+    si_debug('C', chip >> 8);
+    si_debug('C', chip & 0xff);
     return 0;
   }
 
@@ -438,7 +443,7 @@ uint8_t radio_rx(uint8_t len, uint8_t *dest) {
 
   // edge case: there’s data in the fifo, but no RX pending event.
   // this shouldn’t happen. The next radio_rx call will retrieve this data.
-  putchar('E');
+  si_err('E');
 
   return 0;
 }
