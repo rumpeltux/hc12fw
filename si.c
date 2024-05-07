@@ -109,7 +109,7 @@ State Enum:
 8 = RX state.
 */
 // Args: Channel=2, Start delayed, len (16bit_le), timeout_state=0, valid_state=8, invalid_state=8
-static uint8_t si_rx_cmd_buf[8] = {0x32, 2, 0, 0, 0, SI_STATE_NO_CHANGE, SI_STATE_RX, SI_STATE_RX};
+static uint8_t si_rx_cmd_buf[8] = {0x32, 2, 0, 0, 0, SI_STATE_NO_CHANGE, SI_STATE_RX, SI_STATE_NO_CHANGE};
 // len = 2
 static uint8_t low_power_si_rx_cmd_buf[5] = {0x32, 0x02, 0, 0, 0x02};
 // TX_TUNE
