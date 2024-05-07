@@ -47,8 +47,13 @@ void si_set_channel(uint8_t channel);
 // Sets the TX power (0..127).
 void si_set_tx_power(uint8_t power);
 
+// clears RX & TX fifos
+void si_clear_fifo(void);
+
 // returns -1 on failure
 int8_t si_get_rx_fifo_size(void);
+
+void si_read_rx_fifo(uint8_t len, uint8_t *dest);
 
 // Output a character + a number in hex representation.
 void si_debug(uint8_t c, uint8_t n);

@@ -298,7 +298,6 @@ uint8_t radio_init(void) {
   return 1;
 }
 
-// 1: sleep
 void si_change_state(uint8_t state) {
   digitalWrite(SI_CS, 0);
   spi_transfer(0x34); // change state
@@ -363,7 +362,7 @@ void radio_tx(uint8_t len, const uint8_t *data) {
   radio_gpio_rx_mode();
 }
 
-static void si_read_rx_fifo(uint8_t len, uint8_t *dest) {
+void si_read_rx_fifo(uint8_t len, uint8_t *dest) {
   digitalWrite(SI_CS, 0);
   spi_transfer(0x77);  // READ_RX_FIFO
   spi_rx(len, dest);
@@ -395,6 +394,10 @@ int8_t si_get_rx_fifo_size(void) {
   return rx_fifo_size;
 }
 
+void si_clear_fifo(void) {
+  spi_select_tx(sizeof(cmd_clear_fifo), cmd_clear_fifo);
+}
+
 uint8_t si_wait_packet(void) {
   uint8_t res;
   do {
@@ -411,7 +414,7 @@ void si_notify_nirq(void) {
 uint8_t radio_rx(uint8_t len, uint8_t *dest) {
   if (si_get_state() != SI_STATE_RX ||
       (si_rx_cmd_buf[4] != 0 && si_rx_cmd_buf[4] != len)) {
-    spi_select_tx(sizeof(cmd_clear_fifo), cmd_clear_fifo);
+    si_clear_fifo();
     radio_start_rx(len);
   }
 
@@ -432,8 +435,8 @@ uint8_t radio_rx(uint8_t len, uint8_t *dest) {
   // Check pending interrupts to confirm that data is available and valid.
   if ((int_status & 0x8) != 0) { // CRC error
     // Clear fifos to discard bad data.
-    spi_select_tx(sizeof(cmd_clear_fifo), cmd_clear_fifo);
-    return len;
+    si_clear_fifo();
+    return 0;
   }
 
   if ((int_status & 0x10) != 0) { // RX pending
@@ -454,5 +457,5 @@ void radio_wakeup(void) {
 
 void radio_halt(void) {
   // TODO: disable 32K osc
-  si_change_state(1);  // go to sleep
+  si_change_state(SI_STATE_SLEEP);  // go to sleep
 }
