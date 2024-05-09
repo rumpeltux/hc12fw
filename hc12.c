@@ -4,10 +4,18 @@
 #include "Arduino.h"
 #include "si.h"
 #include "stm8.h"
+#include "hc12.h"
 
-uint8_t radio_buf[21];
+// For communication with existing HC12 devices the packet size needs to match
+// the modem baud rate.
+#define PACKET_SIZE HC12_PACKET_SIZE_15KBS
 
-#define HC12_SET B5
+uint8_t radio_buf[PACKET_SIZE + 1];
+
+// With this setting the setup routine will emit a set of packets of
+// decreasing power. You can use this to check the required power
+// setting for a given distance.
+//#define RANGE_TEST 
 
 extern void swimcat_flush(void);
 
@@ -31,71 +39,100 @@ void setup(void) {
   // C4 (IRQ): Low while a radio interrupt is pending.
   attachInterrupt(SI_IRQ, &on_portC, FALLING); // C4
 
-  radio_init();
+  radio_init(si_config_15kbit);
 
-  // The maximum setting (127) is very strong.
+  // The maximum setting (127) is *very* strong.
   // 16 already gets through multiple concrete walls.
   si_set_tx_power(16);
 
-  // 20 is the packet length.
-  // Other lengths are not supported in FU3 mode!
   // \x18 is needed for HC12 to recognize the packet
-  // \x0c Is the length of the string (max: 17 (0x11))
-  radio_tx(20, "\x18\x0c" "HC12 ready\r\n");
-
-  // Start variable length RX
-  radio_start_rx(0);
+  // \x0a Is the length of the string
+  // The original HC12 firmware doesn’t seem to like certain values in certain
+  // positions, esp not \0 bytes, this is why the string is padded with spaces.
+  radio_tx(PACKET_SIZE, "\x18\x0a" "OpenHC12\r\n                                     ");
 
 #ifdef RANGE_TEST
   // Power and range test (disabled by default).
-  strcpy(radio_buf, "\x18\x10" "TX power: 0x00\r\n");
-  for (uint8_t i=0x7f; i>0; i-=2) {
+  strcpy(radio_buf, "\x18\x0a" "TX: 0x00\r\n");
+  for (uint8_t i=0x7e; i>0; i-=2) {
     si_set_tx_power(i);
-    radio_buf[14] = si_hex(i >> 4);
-    radio_buf[15] = si_hex(i & 0xf);
-    radio_tx(20, radio_buf);
+    radio_buf[8] = si_hex(i >> 4);
+    radio_buf[9] = si_hex(i & 0xf);
+    si_debug('t', i);
+    radio_tx(PACKET_SIZE, radio_buf);
+    delay(10);
   }
-  si_set_tx_power(0x10);
+  si_set_tx_power(16);
 #endif
+
+  // Start variable length RX.
+  si_start_rx(0);
+}
+
+// Utility function to dump a packet to stdout.
+void dump_packet(uint8_t len, uint8_t *data) {
+  putchar(':');
+  for (int i = 0; i<len; i++) {
+    putchar(si_hex(data[i] >> 4));
+    putchar(si_hex(data[i] & 0xf));
+  }
 }
 
 void loop(void) {
-  // flush out pending logs, because swimcat doesn’t work while were in sleep mode
+  // flush out pending logs, because swimcat doesn’t work in wfi/halt mode
   swimcat_flush();
 
 rx:
-  // Wait until an interrupt triggered that is of our concern.
-  uint8_t recvd = radio_rx(20, radio_buf);
+  // Receive a packet. This does block until SI_IRQ notifies the MCU that a new
+  // packet has arrived.
+  uint8_t recvd = radio_rx(PACKET_SIZE, radio_buf);
   if (!recvd) return;
 
+  // The original HC12 format is:
   uint8_t header = radio_buf[0];
   uint8_t pkt_size = radio_buf[1] + 2;
   const char *payload = &radio_buf[2];
+
+  dump_packet(recvd, radio_buf);
+  
   if (header != 0x18) {
     puts("Invalid header");
     si_debug('H', header);
     return;
   }
-  if (pkt_size < sizeof(radio_buf))
+
+  if (pkt_size < sizeof(radio_buf)) {
+    // For nicer output only:
     radio_buf[pkt_size] = 0;
+  }
   puts(payload);
 
-  // Check if there's another packet on the way.
-  // It would normally arrive within ~6.5ms
-  delay(8);
-  if (!digitalRead(SI_IRQ))
+  // As an echo server we would now send back the just received packet.
+  // But there may be another packet on the way already and since the channel
+  // is not full duplex, we would kill both transmissions.
+
+  // A followup packet would normally arrive within ~6.5ms at the standard baud
+  // rate, for other rates you need to adjust the time accordingly.
+  delay(/*ms=*/8);  
+  if (!digitalRead(SI_IRQ)) {
+    // The packet handler interrupt triggered. Go straight to the rx.
     goto rx;
+  }
+
+  putchar('S');
 
   // Send the last packet back.
   // (As the chip is not full duplex, this implies that we may miss additional
   // packets that we might receive during transmission.)
-  radio_tx(0x14, radio_buf);
+  radio_tx(PACKET_SIZE, radio_buf);
 
   // To send a shorter packet that the variable-length receiver will recognize:
-  // uint8_t len = strlen(payload) + 2;
-  // radio_buf[0] = len + 4;
-  // radio_tx(len, radio_buf);
+  // #define HC12_LEN_ADJUST (PACKET_SIZE - 1 - 0x18);
+  // uint8_t payload_len = strlen(payload);
+  // uint8_t *packet = radio_buf + 1;
+  // packet[0] = payload_len + HC12_LEN_ADJUST;
+  // radio_tx(payload_len + 1, packet);
 
   // Restart variable length RX.
-  radio_start_rx(0);
+  si_start_rx(0);
 }

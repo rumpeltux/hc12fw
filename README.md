@@ -4,15 +4,19 @@
 
 You can use this repository as a base to build your own HC-12 firmware.
 
-The radio protocol is compatible with `AT+DEFAULT` settings in non-modified
-HC-12 units assuming that you use a packet-length of 20 bytes. For HC-12 to
-receive packets, you need to use a 2-byte header: [0x18, payload-length].
+The radio protocol is compatible with non-modified HC-12 units.
 
-None of the other communication modes are implemented for now, but you can
-change channel and TX power.
+In particular the following works:
 
-Some efforts towards FU-2 have started but are not quite there yet in the
-`fu2-devel` branch.
+* `AT+FU3` settings (including `AT+DEFAULT`)
+* setting channel & TX power
+* the four modem rates (5kbs-236kbs) are supported
+
+The following does not yet work:
+
+* `FU-1`
+* `FU-2` (some efforts have started but are not quite there yet in the
+  `fu2-devel` branch)
 
 ## Installation
 
@@ -45,7 +49,7 @@ To read the console output, run `swimcat/swimcat.py --continue`.
 ## API
 
 See `si.h` for the available APIs. Notably: sending and receiving radio.
-`radio_rx` has to be called after a `radio_tx` to bring the sender into RX state again. TODO: verify why…
+`radio_rx` has to be called after a `radio_tx` to bring the sender into RX state again.
 
 This is linked against the [stm8-arduino library](https://github.com/rumpeltux/stm8-arduino)
 for convenience. All its APIs should also be readily usable.
@@ -53,7 +57,7 @@ for convenience. All its APIs should also be readily usable.
 ## Demo
 
 The default application (`hc12.c`) implements a simple echo service.
-It sends `HC12 ready\r\n` on boot and otherwise resends each packet as received.
+It sends `OpenHC12\r\n` on boot and otherwise resends each packet as received.
 
 This is useful as a communication and range test.
 
@@ -81,7 +85,7 @@ A1,A2,A3\* B5(SET) D1\*,D3,D4,D5(TX),D6(RX)
 
 TODO: verify D4 can be used
 
-B5,D5 and D6 already have holes for pin-connectors. \
+B5(SET),D5(TX) and D6(RX) already have holes for pin-connectors. \
 A3,D3 are at the chip’s edge, so their legs are more easily accessible for soldering.
 
 ## Useful references
