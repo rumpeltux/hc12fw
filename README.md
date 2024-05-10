@@ -56,7 +56,7 @@ for convenience. All its APIs should also be readily usable.
 
 ## Demo
 
-The default application (`hc12.c`) implements a simple echo service.
+The default application (`echo_demo.c`) implements a simple echo service.
 It sends `OpenHC12\r\n` on boot and otherwise resends each packet as received.
 
 This is useful as a communication and range test.
@@ -68,7 +68,7 @@ instructions in https://github.com/rumpeltux/hc12
 
 ## FW Structure
 
-* `hc12.c` is the main application file and making use of [stm8-arduino](https://github.com/rumpeltux/stm8-arduino)
+* `echo_demo.c` is the main application file and making use of [stm8-arduino](https://github.com/rumpeltux/stm8-arduino)
 * `si.c` implements the radio interactions.
 
 `si.c` and other libraries that are unlikely to change are bundled to a separate

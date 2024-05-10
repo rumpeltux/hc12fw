@@ -2,7 +2,7 @@
 ARDUINO ?= arduino
 
 # The default target to build.
-TARGET ?= hc12
+TARGET ?= echo_demo
 
 CC := sdcc
 CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src -DSWIMCAT_BUFSIZE_BITS=7

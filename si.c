@@ -494,7 +494,7 @@ uint8_t radio_rx(uint8_t len, uint8_t *dest) {
   int8_t rxfifo = si_get_rx_fifo_size();
   if (rxfifo < 0)
     return 0;
-  if (rxfifo < len)
+  if (rxfifo < (int8_t) len)
     len = rxfifo;
 
   // Check pending interrupts to confirm that data is available and valid.
