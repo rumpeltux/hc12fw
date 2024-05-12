@@ -1,8 +1,10 @@
 # The path at which the stm8-arduino lib is located
 ARDUINO ?= arduino
 
-# The default target to build.
+# The default target to build. Can be overridden, e.g. `make TARGET=range_test_demo`
 TARGET ?= echo_demo
+FLASH_CMD ?= swimcat/esp-stlink/python/flash.py
+FLASH_ARGS ?= --stall
 
 CC := sdcc
 CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src -DSWIMCAT_BUFSIZE_BITS=7
@@ -33,7 +35,7 @@ $(TARGET).ihx: $(ARDUINO_LIB) $(TARGET).rel static.lib.rel $(ARDUINO)/src/main.r
 
 flash: $(TARGET).ihx static.lib.ihx
 	for i in $^; do \
-	  [ -e $$i.needsflash ] && swimcat/esp-stlink/python/flash.py --stall -i $$i && rm $$i.needsflash || true; \
+	  [ -e $$i.needsflash ] && $(FLASH_CMD) $(FLASH_ARGS) -i $$i && rm $$i.needsflash || true; \
 	done
 
 clean:

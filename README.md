@@ -56,10 +56,12 @@ for convenience. All its APIs should also be readily usable.
 
 ## Demo
 
-The default application (`echo_demo.c`) implements a simple echo service.
+The default application (`echo_demo.c`) implements a simple echo service and
+showcases a variety of APIs.
 It sends `OpenHC12\r\n` on boot and otherwise resends each packet as received.
 
-This is useful as a communication and range test.
+For a trimmed-down and much simpler example look at `range_test_demo.c`,
+which sends packets of decreasing power to an original HC12 receiver.
 
 ## Restoring the original firmware
 
@@ -68,12 +70,13 @@ instructions in https://github.com/rumpeltux/hc12
 
 ## FW Structure
 
-* `echo_demo.c` is the main application file and making use of [stm8-arduino](https://github.com/rumpeltux/stm8-arduino)
+* The main application files (e.g. `echo_demo.c` or `range_test_demo.c`) 
+  make use of [stm8-arduino](https://github.com/rumpeltux/stm8-arduino)
 * `si.c` implements the radio interactions.
 
 `si.c` and other libraries that are unlikely to change are bundled to a separate
-section of the firmware, so that you don’t need to reflash them all the time
-during development.
+section of the firmware (`static.lib.ihx`), so that you don’t need to reflash
+them all the time during development.
 
 ## Available GPIO PINs
 

@@ -12,11 +12,6 @@
 
 uint8_t radio_buf[PACKET_SIZE + 1];
 
-// With this setting the setup routine will emit a set of packets of
-// decreasing power. You can use this to check the required power
-// setting for a given distance.
-//#define RANGE_TEST 
-
 extern void swimcat_flush(void);
 
 void on_portC(void) {  // IO1 / IRQ
@@ -30,7 +25,12 @@ void on_portB(void) {
 }
 
 void setup(void) {
-  SERIAL_INIT(9600);
+  // The UART isn’t actually used in this firmware, because swimcat is linked in
+  // which provides the putchar method and enables respective stdio.h functionality.
+  // To send logs to UART instead of swimcat, remove mentions of swimcat_flush in
+  // this file and remove the swimcat/swimcat.rel linkage from the Makefile.
+  // SERIAL_INIT(9600);
+
   puts("HC12\r");
 
   pinMode(HC12_SET, INPUT_PULLUP);
@@ -51,20 +51,6 @@ void setup(void) {
   // positions, esp not \0 bytes, this is why the string is padded with spaces.
   radio_tx(PACKET_SIZE, "\x18\x0a" "OpenHC12\r\n                                     ");
 
-#ifdef RANGE_TEST
-  // Power and range test (disabled by default).
-  strcpy(radio_buf, "\x18\x0a" "TX: 0x00\r\n");
-  for (uint8_t i=0x7e; i>0; i-=2) {
-    si_set_tx_power(i);
-    radio_buf[8] = si_hex(i >> 4);
-    radio_buf[9] = si_hex(i & 0xf);
-    si_debug('t', i);
-    radio_tx(PACKET_SIZE, radio_buf);
-    delay(10);
-  }
-  si_set_tx_power(16);
-#endif
-
   // Start variable length RX.
   si_start_rx(0);
 }
@@ -76,6 +62,7 @@ void dump_packet(uint8_t len, uint8_t *data) {
     putchar(si_hex(data[i] >> 4));
     putchar(si_hex(data[i] & 0xf));
   }
+  putchar('\n');
 }
 
 void loop(void) {
@@ -118,8 +105,6 @@ rx:
     // The packet handler interrupt triggered. Go straight to the rx.
     goto rx;
   }
-
-  putchar('S');
 
   // Send the last packet back.
   // (As the chip is not full duplex, this implies that we may miss additional
