@@ -1,4 +1,14 @@
 // Definitions specific to the HC12 board.
+#if REVISION <= 24
+  #define SI_IRQ C4
+  #define SI_IO1_CTS C3
+  #define SI_CS D2
+#elif REVISION >= 26
+  #define SI_IRQ C4
+  #define SI_RESET D4
+  #define SI_IO1_CTS C3
+  #define SI_CS D3
+#endif
 
 // Pinout
 #define HC12_SET B5

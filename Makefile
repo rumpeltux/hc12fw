@@ -6,8 +6,11 @@ TARGET ?= echo_demo
 FLASH_CMD ?= swimcat/esp-stlink/python/flash.py
 FLASH_ARGS ?= --stall
 
+# For v2.3/v2.4 set this to 24
+REVISION ?= 26
+
 CC := sdcc
-CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src -DSWIMCAT_BUFSIZE_BITS=7
+CFLAGS := -mstm8 --std-c99 --opt-code-size -I$(ARDUINO)/include -L$(ARDUINO)/src -DSWIMCAT_BUFSIZE_BITS=7 -DREVISION=$(REVISION)
 ARDUINO_LIB := $(ARDUINO)/src/arduino.lib
 
 all: $(TARGET).ihx

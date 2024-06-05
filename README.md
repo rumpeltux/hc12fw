@@ -18,6 +18,11 @@ The following does not yet work:
 * `FU-2` (some efforts have started but are not quite there yet in the
   `fu2-devel` branch)
 
+## Supported Devices
+
+* HC12-v2.3 (sometimes identified is v2.4) using the Si4463 radio
+* HC12-v2.6 using the cheaper Si4438 radio (experimental)
+
 ## Installation
 
 ```shell
@@ -35,7 +40,10 @@ IMPORTANT: Make sure that your `sdcc --version` is at least 4.4.
 There are known compiler bugs in the previous version that will render the
 firmware non-functional.
 
-To build the module, just run: `make`
+To build the module:
+
+1. (for v2.3/v2.4 only) edit `Makefile` and update the REVISION variable, then `make clean`
+2. run `make` to build the firmware
 
 ## Flashing
 
@@ -96,6 +104,6 @@ A3,D3 are at the chip’s edge, so their legs are more easily accessible for sol
 * [Si4463 Datasheet](https://www.silabs.com/documents/public/data-sheets/Si4464-63-61-60.pdf)
 * [Si4463 API Reference (zip)](http://www.silabs.com/documents/public/application-notes/EZRadioPRO_REVB1_API.zip)
 * [STM8S Datasheet](https://www.st.com/resource/en/datasheet/stm8s103f2.pdf)
-* Pinout (all partially incomplete, but still helpful).
+* v2.3/v2.4 pinouts (all partially incomplete, but still helpful).
   * https://twitter.com/cathedrow/status/845044463118553091/photo/1
   * https://cxem.net/review/review26.php

@@ -1,11 +1,6 @@
 #include "Arduino.h"
 #include <stdint.h>
 
-#define SI_IRQ C4
-#define SI_IO0_TXSTATE B4
-#define SI_IO1_CTS C3
-#define SI_CS D2
-
 extern const uint8_t si_config_5kbit[];
 extern const uint8_t si_config_15kbit[];
 extern const uint8_t si_config_58kbit[];

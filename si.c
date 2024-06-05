@@ -1,12 +1,10 @@
 
-#include "si.h"
 #include "Arduino.h"
+#include "hc12.h"
+#include "si.h"
 #include "stm8.h"
 
 #include <stdio.h>
-
-#define STATE_SI_TX_DONE PIN0
-#define STATE_SI_PKT_RECEIVED PIN1
 
 #define PENDING_INTERRUPTS_CLEAR 0
 #define PENDING_INTERRUPTS_KEEP 1
@@ -317,8 +315,14 @@ uint8_t radio_init(const uint8_t *si_config_p) {
   pinMode(SI_CS, OUTPUT);
 
   pinMode(SI_IRQ, INPUT);
-  pinMode(SI_IO0_TXSTATE, INPUT);
   pinMode(SI_IO1_CTS, INPUT);
+
+#ifdef SI_RESET
+  digitalWrite(SI_RESET, 1);
+  pinMode(SI_RESET, OUTPUT);
+  delayMicroseconds(20);
+  digitalWrite(SI_RESET, 0);
+#endif
 
   spi_begin();
   // Set speed to 8MHz (Si4463 is max 10MHz)
@@ -331,7 +335,7 @@ uint8_t radio_init(const uint8_t *si_config_p) {
   // Sanity check to confirm that peripheral communication
   // and the radio chip are working.
   uint16_t chip = si_get_chip();
-  if (chip != 0x4463) {
+  if (chip != 0x4463 && chip != 0x4438) {
     // unexpected / unsupport chip (or read failure when 0)
     si_debug('C', chip >> 8);
     si_debug('C', chip & 0xff);
